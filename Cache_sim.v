@@ -28,7 +28,8 @@ module Cache_sim();
     reg [31:0] addr_i = 32'b0;
     
     wire data_ok;
-    wire [31:0] rdata;
+    wire [31:0] rdata1;
+    wire [31:0] rdata2;
     
     wire rd_req;
     wire [31:0] rd_addr;
@@ -38,7 +39,7 @@ module Cache_sim();
     
     Cache Cache_u(.clk(clk), .rst(rst), 
                   .valid(valid), .addr_i(addr_i), 
-                  .data_ok(data_ok), .rdata(rdata), 
+                  .data_ok(data_ok), .rdata1(rdata1), .rdata2(rdata2), 
                   .rd_req(rd_req), .rd_addr(rd_addr), 
                   .ret_valid(ret_valid), .ret_data(ret_data));
                     
@@ -58,7 +59,7 @@ module Cache_sim();
             #20 ret_valid = 1'b0;
         end
         wait(data_ok == 1'b1)begin
-            if(rdata == 32'h78910234)begin
+            if(rdata1 == 32'h78910234 && rdata2 == 32'h91023456)begin
                 $display("success:not hit, addr==0 but not valid");
                 $stop;
             end else begin

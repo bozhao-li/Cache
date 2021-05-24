@@ -39,7 +39,8 @@ module Cache(
     //input wire [31:0] wdata,    
     //output wire addr_ok,         //address transfer in is OK
     output wire data_ok,         //data transfer out is OK
-    output wire [31:0] rdata,    
+    output wire [31:0] rdata1,    
+    output wire [31:0] rdata2,
     
     //Cache port with AXI
     output wire rd_req,          //read valid request
@@ -159,8 +160,10 @@ module Cache(
     end
     
     //data select
-    wire [31:0]inst_way0 = way0_cacheline[offset[3:2]];     //cache address partition in page 228
-    wire [31:0]inst_way1 = way1_cacheline[offset[3:2]];
+    wire [31:0]inst1_way0 = way0_cacheline[offset[3:2]];     //cache address partition in page 228
+    wire [31:0]inst2_way0 = way0_cacheline[offset[3:2] + 'b1];
+    wire [31:0]inst1_way1 = way1_cacheline[offset[3:2]];
+    wire [31:0]inst2_way1 = way1_cacheline[offset[3:2] + 'b1];
     
     //tag compare
     assign hit_judge_way0 = (tag == way0_tagv[19:0] && way0_tagv[20] == 1'b1) ? 1'b1 :1'b0;
@@ -176,13 +179,21 @@ module Cache(
                      //(op && m_current_state == `MLookUp ) ? 1'b1 :    //write
                      (m_current_state == `MRefill && ret_valid == 1'b1) ? 1'b1 : 
                      1'b0;
-    assign rdata = (m_current_state==`MLookUp && hit_judge_way0 == 1'b1)? inst_way0:
-                   (m_current_state==`MLookUp && hit_judge_way1 == 1'b1)? inst_way1:
-                   (m_current_state==`MRefill && offset[3:2] == 2'h0)? read_from_AXI[32*1-1:32*0]:
-                   (m_current_state==`MRefill && offset[3:2] == 2'h1)? read_from_AXI[32*2-1:32*1]:
-                   (m_current_state==`MRefill && offset[3:2] == 2'h2)? read_from_AXI[32*3-1:32*2]:
-                   (m_current_state==`MRefill && offset[3:2] == 2'h3)? read_from_AXI[32*4-1:32*3]:
-                   32'b0;
+    assign rdata1 = (m_current_state==`MLookUp && hit_judge_way0 == 1'b1)? inst1_way0:
+                     (m_current_state==`MLookUp && hit_judge_way1 == 1'b1)? inst1_way1:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h0)? read_from_AXI[32*1-1:32*0]:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h1)? read_from_AXI[32*2-1:32*1]:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h2)? read_from_AXI[32*3-1:32*2]:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h3)? read_from_AXI[32*4-1:32*3]:
+                     32'b0;
+    
+    assign rdata2 = (m_current_state==`MLookUp && hit_judge_way0 == 1'b1)? inst2_way0:
+                     (m_current_state==`MLookUp && hit_judge_way1 == 1'b1)? inst2_way1:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h0)? read_from_AXI[32*2-1:32*1]:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h1)? read_from_AXI[32*3-1:32*2]:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h2)? read_from_AXI[32*4-1:32*3]:
+                     (m_current_state==`MRefill && offset[3:2] == 2'h3)? read_from_AXI[32*1-1:32*0]:
+                     32'b0;
     
     //output to AXI
     assign rd_req = (m_current_state == `MReplace && !ret_valid) ? 1 : 0;
