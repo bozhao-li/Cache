@@ -31,12 +31,6 @@ module ICache_pipeline(
     output wire stall, 
     input wire flush,
     
-//    // message from BPU
-//    input wire is_in_delayslot_i,
-//	input wire [`RegBus] predict_pta2_i,
-//    output reg is_in_delayslot_o,
-//    output reg [`RegBus] predict_pta2_o,
-    
     //Cache port with CPU
     input wire valid,           //valid request
     input wire [31:0] vaddr_i1,
@@ -48,6 +42,14 @@ module ICache_pipeline(
     output wire [31:0] rdata2,
     output wire [31:0] raddr1,
     output wire [31:0] raddr2,
+    
+    // with BPU
+    input wire [34:0] predict_pkti1,
+    input wire [34:0] predict_pkti2,
+    input wire instbuffer_full,
+    output wire [34:0] predict_pkto1,
+    output wire [34:0] predict_pkto2,
+    output reg [31:0] icache_npc,
     
     //Cache port with AXI
     output wire [7:0] rd_len,
@@ -73,6 +75,21 @@ module ICache_pipeline(
     reg [31:0] vaddr_i2_2;
     reg iuncache_2;
     
+    // branch_predict
+//    reg [31:0] inst_delayslot_addr, inst_delayslot_addr_ff;
+    reg keep_pta, keep_pta_ff;
+    reg inst_delayslot, inst_delayslot_ff;
+    reg instbuffer_full_ff;
+    reg [31:0] icache_npc_ff;
+    reg [34:0] predict_pkti1_2, predict_pkti2_2;
+    reg inst_delayslot_fetch;  // 为1表示取到了延迟槽指令
+    reg inst_delayslot_fetch_ff;
+    
+    wire predict_dir1 = predict_pkti1_2[34];
+    wire predict_dir2 = predict_pkti2_2[34];
+    wire [31:0] predict_pta1 = predict_pkti1_2[33:2];
+    wire [31:0] predict_pta2 = predict_pkti2_2[33:2];
+    
     assign ptag_1 = paddr_i[31:12];
     assign index_1 = paddr_i[11:4];
     assign offset_1 = paddr_i[3:0];
@@ -87,20 +104,26 @@ module ICache_pipeline(
     wire wea_way0;
     wire [20:0] way0_tagv;
     wire [31:0] way0_cacheline[3:0];
-    Tagv_dual_ram tagv_way0(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_tagv), .enb(1'b1));
-    Data_dual_ram Bank0_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[0]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[0]), .enb(1'b1));
-    Data_dual_ram Bank1_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[1]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[1]), .enb(1'b1));
-    Data_dual_ram Bank2_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[2]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[2]), .enb(1'b1));
-    Data_dual_ram Bank3_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[3]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[3]), .enb(1'b1));
+    wire rsta_busy1;
+    wire rstb_busy1;
+    wire read_enb0 = ~(wea_way0 && index_2 == read_addr);
+    Tagv_dual_ram tagv_way0(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_tagv), .enb(read_enb0), .rstb(~rst), .rsta_busy(rsta_busy1), .rstb_busy(rstb_busy1));
+    Data_dual_ram Bank0_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[0]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[0]), .enb(read_enb0));
+    Data_dual_ram Bank1_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[1]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[1]), .enb(read_enb0));
+    Data_dual_ram Bank2_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[2]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[2]), .enb(read_enb0));
+    Data_dual_ram Bank3_way0(.addra(index_2), .clka(clk), .dina(read_from_AXI[3]), .ena(wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[3]), .enb(read_enb0));
     
     wire wea_way1;
     wire [20:0] way1_tagv;
     wire [31:0] way1_cacheline[3:0];
-    Tagv_dual_ram tagv_way1(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_tagv), .enb(1'b1));
-    Data_dual_ram Bank0_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[0]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[0]), .enb(1'b1));
-    Data_dual_ram Bank1_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[1]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[1]), .enb(1'b1));
-    Data_dual_ram Bank2_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[2]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[2]), .enb(1'b1));
-    Data_dual_ram Bank3_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[3]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[3]), .enb(1'b1));
+    wire rsta_busy2;
+    wire rstb_busy2;
+    wire read_enb1 = ~(wea_way1 && index_2 == read_addr);   
+    Tagv_dual_ram tagv_way1(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_tagv), .enb(read_enb1), .rstb(~rst), .rsta_busy(rsta_busy2), .rstb_busy(rstb_busy2));
+    Data_dual_ram Bank0_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[0]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[0]), .enb(read_enb1));
+    Data_dual_ram Bank1_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[1]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[1]), .enb(read_enb1));
+    Data_dual_ram Bank2_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[2]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[2]), .enb(read_enb1));
+    Data_dual_ram Bank3_way1(.addra(index_2), .clka(clk), .dina(read_from_AXI[3]), .ena(wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[3]), .enb(read_enb1));
     
     
     //* Hit Pipeline: 2 states, Idle and LookUp*//
@@ -112,9 +135,14 @@ module ICache_pipeline(
             ptag_2 <= 20'b0;
             index_2 <= 8'b0;
             offset_2 <= 4'b0;
-            vaddr_i1_2 <= 32'b0;
-            vaddr_i2_2 <= 32'b0;
+            vaddr_i1_2 <= 32'h0;
+            vaddr_i2_2 <= 32'h0;
             iuncache_2 <= 1'b0;
+//            inst_delayslot_addr_ff <= 32'b0;
+            keep_pta_ff <= 1'b0;
+            predict_pkti1_2 <= 35'b0;
+            predict_pkti2_2 <= 35'b0;
+            instbuffer_full_ff <= 1'b0;
         end else if(stall)begin
             valid_2 <= valid_2;
             ptag_2 <= ptag_2;
@@ -123,6 +151,11 @@ module ICache_pipeline(
             vaddr_i1_2 <= vaddr_i1_2;
             vaddr_i2_2 <= vaddr_i2_2;
             iuncache_2 <= iuncache_2;
+            keep_pta_ff <= keep_pta_ff;
+//            inst_delayslot_addr_ff <= inst_delayslot_addr_ff;
+            predict_pkti1_2 <= predict_pkti1_2;
+            predict_pkti2_2 <= predict_pkti2_2;
+            instbuffer_full_ff <= instbuffer_full_ff;
         end else begin
             valid_2 <= valid_1;
             ptag_2 <= ptag_1;
@@ -131,12 +164,96 @@ module ICache_pipeline(
             vaddr_i1_2 <= vaddr_i1_1;
             vaddr_i2_2 <= vaddr_i2_1;
             iuncache_2 <= iuncache_i;
+            keep_pta_ff <= keep_pta;
+//            inst_delayslot_addr_ff <= inst_delayslot_addr;
+            predict_pkti1_2 <= predict_pkti1;
+            predict_pkti2_2 <= predict_pkti2;
+            instbuffer_full_ff <= instbuffer_full;
         end
     end
     
-    
+    always @(posedge clk) begin
+        if (~rst | flush) begin
+            icache_npc_ff <= 32'b0;
+            inst_delayslot_fetch_ff <= 1'b1;
+            inst_delayslot_ff <= 1'b0;
+        end else begin
+            icache_npc_ff <= icache_npc;
+            inst_delayslot_fetch_ff <= inst_delayslot_fetch;
+            inst_delayslot_ff <= inst_delayslot;
+        end
+    end
+
     wire hit;                               //hit:1
     wire nhit;
+       
+    wire data_ok_for_delayslot =  (iuncache_2 && ret_valid) ? 1'b1 :
+                                   hit ? 1'b1 : 
+                                   (nhit && ret_valid) ? 1'b1: 
+                                   1'b0;
+    // icache_npc
+    always @(*) begin
+        if (~rst)                                                           icache_npc = 32'hbfc00000;
+//        else if (~inst_delayslot_fetch_ff & inst_delayslot_ff & data_ok1)   icache_npc = inst_delayslot_addr_ff;
+//        else if (predict_dir1 & data_ok2)                                   icache_npc = predict_pta1;  // 预测第一条指令跳转且取出延迟槽指令后，跳转
+        else if (predict_dir1 & data_ok1)                                   icache_npc = predict_pta1;
+        else if (predict_dir2 & data_ok2)                                   icache_npc = predict_pta2;
+//        else if (iuncache_2 && icache_npc == vaddr_i1_2)                    icache_npc = vaddr_i2_2;  // iuncache时，为pc+4
+        else if (instbuffer_full_ff)                                        icache_npc = icache_npc_ff;
+        else if (iuncache_2 & ~keep_pta)                                    icache_npc = vaddr_i2_2;
+        else if (stall)                                                     icache_npc = vaddr_i1;  // 暂停则保持
+        else if (&offset_1[3:2])                                            icache_npc = vaddr_i1 + 32'h4;  // 不同字块时，为pc+4
+        else                                                                icache_npc = vaddr_i1 + 32'h8;
+    end
+    
+    // inst_delayslot
+    always @(*) begin
+        if (~rst) begin
+            inst_delayslot = 1'b0;
+//            inst_delayslot_addr = 32'b0;
+            inst_delayslot_fetch = 1'b1;
+            keep_pta = 1'b0;
+        end else if (~inst_delayslot_fetch_ff & data_ok_for_delayslot) begin
+            inst_delayslot = inst_delayslot_ff;
+//            inst_delayslot_addr = inst_delayslot_addr_ff;
+            inst_delayslot_fetch = 1'b1;
+            keep_pta = 1'b0;
+        end else if (inst_delayslot_fetch_ff & inst_delayslot_ff & data_ok1) begin
+            inst_delayslot = 1'b0;
+//            inst_delayslot_addr = 32'b0;
+            inst_delayslot_fetch = 1'b1;
+            keep_pta = 1'b0;
+        end else if (predict_dir1 & data_ok2) begin
+            inst_delayslot = 1'b0;
+//            inst_delayslot_addr = 32'b0;
+            inst_delayslot_fetch = 1'b0;
+            keep_pta = 1'b1;
+        end else if (predict_dir1 & data_ok1) begin
+            inst_delayslot = 1'b1;
+//            inst_delayslot_addr = predict_pta1;  // 取完延迟槽指令后跳转到pta1
+            inst_delayslot_fetch = 1'b1;
+            keep_pta = 1'b1;
+        end else if (predict_dir2 & data_ok2) begin
+            inst_delayslot = 1'b1;
+//            inst_delayslot_addr = predict_pta2 + 32'h8;
+            inst_delayslot_fetch = 1'b1;
+            keep_pta = 1'b1;
+        end else if (data_ok_for_delayslot) begin
+             inst_delayslot = inst_delayslot_ff;
+//            inst_delayslot_addr = inst_delayslot_addr_ff;
+            inst_delayslot_fetch = inst_delayslot_fetch_ff;
+            keep_pta = 1'b0;
+        end else begin
+            inst_delayslot = inst_delayslot_ff;
+//            inst_delayslot_addr = inst_delayslot_addr_ff;
+            inst_delayslot_fetch = inst_delayslot_fetch_ff;
+            keep_pta = keep_pta_ff;
+        end
+    end
+    
+    assign predict_pkto1 = predict_pkti1_2;
+    assign predict_pkto2 = predict_pkti2_2;
+    
     wire hit_judge_way0;
     wire hit_judge_way1;
     
@@ -146,9 +263,9 @@ module ICache_pipeline(
     always@(posedge clk)begin
         if(~rst)begin
             LRU <= 256'b0;
-        end else if((data_ok1 | data_ok2) && hit)begin
+        end else if(data_ok_for_delayslot && hit)begin
             LRU[index_1] <= hit_judge_way0;
-        end else if((data_ok1 | data_ok2) && !hit)begin
+        end else if(data_ok_for_delayslot && !hit)begin
             LRU[index_1] <= !hit_judge_way0;
         end else begin
             LRU <= LRU;
@@ -179,8 +296,8 @@ module ICache_pipeline(
     
     //*logics*//
     //////////inner logics
-    assign wea_way0 = (ret_valid && LRU_current == 1'b0);
-    assign wea_way1 = (ret_valid && LRU_current == 1'b1);
+    assign wea_way0 = (ret_valid && LRU_current == 1'b0 && ~iuncache_2);
+    assign wea_way1 = (ret_valid && LRU_current == 1'b1 && ~iuncache_2);
     
     //data select
     wire [31:0]inst1_way0 = collision_way0 ? inst1_from_mem_2 : way0_cacheline[offset_2[3:2]];     //cache address partition in page 228
@@ -202,12 +319,15 @@ module ICache_pipeline(
     assign nhit = iuncache_2 ? 1'b1 : ~(hit_judge_way0 | hit_judge_way1) & valid_2;    
     
     //////////output logics
-    assign data_ok1 = (iuncache_2 && ret_valid) ? 1'b1 :
+    assign data_ok1 = ~inst_delayslot_fetch_ff ? 1'b0 :
+                      (iuncache_2 && ret_valid) ? 1'b1 :
                       hit ? 1'b1 : 
                       (nhit && ret_valid) ? 1'b1: 
                       1'b0;
     
-    assign data_ok2 = (iuncache_2 && ret_valid) ? 1'b0 :
+    assign data_ok2 = ~inst_delayslot_fetch_ff ? 1'b0 :
+                      inst_delayslot_ff ? 1'b0 : 
+                      (iuncache_2 && ret_valid) ? 1'b0 :
                       (offset_2[3:2] == 2'b11) ? 1'b0 : 
                       data_ok1;
     
@@ -229,9 +349,8 @@ module ICache_pipeline(
                     32'b0;
     
     assign raddr1 = vaddr_i1_2;
-//    assign raddr1 = vaddr_i1;    
+    
     assign raddr2 = vaddr_i2_2;
-//    assign raddr2 = vaddr_i2;
         
     assign rd_len = (iuncache_i & rd_req) ? 8'h0 : 8'h3;
     
@@ -239,7 +358,7 @@ module ICache_pipeline(
 
     assign rd_addr = iuncache_i ? {ptag_2, index_2, offset_2} : {ptag_2, index_2, 4'b0};
     
-    assign stall = (iuncache_2 && data_ok1 == 1'b0) ? 1'b1 :
-                   (nhit && data_ok1 == 1'b0) ? 1'b1 :1'b0 ;
+    assign stall = (iuncache_2 && data_ok_for_delayslot == 1'b0) ? 1'b1 :
+                   (nhit && data_ok_for_delayslot == 1'b0) ? 1'b1 :1'b0 ;
     
 endmodule

@@ -23,7 +23,8 @@
 module WriteBuffer(
     input wire clk,
     input wire rst,
-    input wire duncache_i,  
+    input wire [1:0] judge,
+//    input wire duncache_i,  
     
     
     input wire wreq_i,          //CPU write
@@ -72,7 +73,7 @@ module WriteBuffer(
         end else if(wreq_i && !write_hit) begin          //write into queue
             FIFO_valid[tail] <= 1'b1;
             tail <= tail + 1'b1;
-        end else if(AXI_valid_i && !duncache_i && !write_hit_head)begin
+        end else if(AXI_valid_i && judge[1] && !write_hit_head && FIFO_valid[head])begin
             FIFO_valid[head] <= 1'b0;
             head <= head + 1'b1;
         end else begin
@@ -150,15 +151,12 @@ module WriteBuffer(
         end
     end
     
-    
-    
-
     //write into AXI
     assign AXI_wen_o = (state_o == 2'b00) ? 1'b0 : 
-                       AXI_valid_i ? 1'b0 : 
+                       (AXI_valid_i & judge[1]) ? 1'b0 : 
                        1'b1;
-    assign AXI_wdata_o = FIFO_data[head];
-    assign AXI_waddr_o = FIFO_addr[head];
+    assign AXI_wdata_o = FIFO_valid[head] ? FIFO_data[head] : 128'b0;
+    assign AXI_waddr_o = FIFO_valid[head] ? FIFO_addr[head] : 32'b0;
     
 endmodule
 

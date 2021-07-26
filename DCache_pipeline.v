@@ -48,13 +48,15 @@ module DCache_pipeline(
     output wire wr_req_o,          //write valid request 
     output wire [31:0] wr_addr_o,
     output wire [127:0] wr_data_o,
-    input wire wr_rdy_i,           //write receive ready handshake signal
+//    input wire wr_rdy_i,           //write receive ready handshake signal
     input wire wr_valid_i,
     
-    //debug
-    output wire [255:0] de_dirty_way0,
-    output wire [255:0] de_dirty_way1,
-    output wire hit_o
+    output reg [1:0] judge
+    
+//    //debug
+//    output wire [255:0] de_dirty_way0,
+//    output wire [255:0] de_dirty_way1,
+//    output wire hit_o
     
     );
     
@@ -67,6 +69,7 @@ module DCache_pipeline(
     wire wvalid_1;
     wire [3:0] wsel_1;
     wire [31:0] wdata_1;
+    wire flush_1;
     
     reg [19:0] ptag_2;
     reg [7:0] index_2;
@@ -75,6 +78,7 @@ module DCache_pipeline(
     reg wvalid_2;
     reg [3:0] wsel_2;
     reg [31:0] wdata_2;
+    
     reg duncache_2;
     
     assign ptag_1 = paddr_i[31:12];
@@ -125,20 +129,26 @@ module DCache_pipeline(
     wire [3:0] wea_way0;
     wire [20:0] way0_tagv;
     wire [31:0] way0_cacheline[3:0];
-    Tagv_dual_ram tagv_way0(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(|wea_way0), .wea(|wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_tagv), .enb(1'b1));
-    Data_dual_ram_d Bank0_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[0]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[0]), .enb(1'b1));
-    Data_dual_ram_d Bank1_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[1]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[1]), .enb(1'b1));
-    Data_dual_ram_d Bank2_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[2]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[2]), .enb(1'b1));
-    Data_dual_ram_d Bank3_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[3]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[3]), .enb(1'b1));
+    wire rsta_busy1;
+    wire rstb_busy1;
+    wire read_enb0 = ~(|wea_way0 && index_2 == read_addr);
+    Tagv_dual_ram tagv_way0(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(|wea_way0), .wea(|wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_tagv), .enb(read_enb0), .rstb(~rst), .rsta_busy(rsta_busy1), .rstb_busy(rstb_busy1));
+    Data_dual_ram_d Bank0_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[0]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[0]), .enb(read_enb0));
+    Data_dual_ram_d Bank1_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[1]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[1]), .enb(read_enb0));
+    Data_dual_ram_d Bank2_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[2]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[2]), .enb(read_enb0));
+    Data_dual_ram_d Bank3_way0(.addra(index_2), .clka(clk), .dina(write_into_Cache[3]), .ena(|wea_way0), .wea(wea_way0), .addrb(read_addr), .clkb(clk), .doutb(way0_cacheline[3]), .enb(read_enb0));
     
     wire [3:0] wea_way1;
     wire [20:0] way1_tagv;
     wire [31:0] way1_cacheline[3:0];
-    Tagv_dual_ram tagv_way1(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(|wea_way1), .wea(|wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_tagv), .enb(1'b1));
-    Data_dual_ram_d Bank0_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[0]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[0]), .enb(1'b1));
-    Data_dual_ram_d Bank1_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[1]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[1]), .enb(1'b1));
-    Data_dual_ram_d Bank2_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[2]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[2]), .enb(1'b1));
-    Data_dual_ram_d Bank3_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[3]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[3]), .enb(1'b1));
+    wire rsta_busy2;
+    wire rstb_busy2;
+    wire read_enb1 = ~(|wea_way1 && index_2 == read_addr);   
+    Tagv_dual_ram tagv_way1(.addra(index_2), .clka(clk), .dina({1'b1, ptag_2}), .ena(|wea_way1), .wea(|wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_tagv), .enb(read_enb1), .rstb(~rst), .rsta_busy(rsta_busy2), .rstb_busy(rstb_busy2));
+    Data_dual_ram_d Bank0_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[0]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[0]), .enb(read_enb1));
+    Data_dual_ram_d Bank1_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[1]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[1]), .enb(read_enb1));
+    Data_dual_ram_d Bank2_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[2]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[2]), .enb(read_enb1));
+    Data_dual_ram_d Bank3_way1(.addra(index_2), .clka(clk), .dina(write_into_Cache[3]), .ena(|wea_way1), .wea(wea_way1), .addrb(read_addr), .clkb(clk), .doutb(way1_cacheline[3]), .enb(read_enb1));
         
     
     
@@ -196,8 +206,8 @@ module DCache_pipeline(
         end
     end
     
-    assign de_dirty_way0 = dirty_way0;
-    assign de_dirty_way1 = dirty_way1;
+//    assign de_dirty_way0 = dirty_way0;
+//    assign de_dirty_way1 = dirty_way1;
     
     
     
@@ -258,33 +268,48 @@ module DCache_pipeline(
         end
     end
     
+    
+    //UnCache
+    wire UnCache_req;
+    wire [127:0] UnCache_data;
+    wire [31:0] UnCache_addr;
+    
+    assign UnCache_req = (wr_valid_i && judge[0]) ? 1'b0 :  
+                         (duncache_2 & wvalid_2);
+    assign UnCache_data = (duncache_2 & wr_req_o) ? {4{wdata_2}}: 128'b0;
+    assign UnCache_addr = (duncache_2 & wr_req_o) ? {ptag_2, index_2, offset_2} : 32'b0;    
+    
     wire FIFO_req;
+    
+    always @(posedge clk) begin
+        if (~rst)                           judge <= 2'b00;
+        else if (wr_valid_i & UnCache_req)  judge <= 2'b01;
+        else if (wr_valid_i & FIFO_req)     judge <= 2'b10;
+        else if (wr_valid_i)                judge <= 2'b00;
+        else if (|judge)                    judge <= judge;
+        else if (UnCache_req)               judge <= 2'b01;
+        else if (FIFO_req)                  judge <= 2'b10;
+    end
+    
+
+    
     wire [127:0] FIFO_data;
     wire [31:0] FIFO_addr;
-    WriteBuffer WriteBuffer_u(.clk(clk), .rst(rst), .duncache_i(duncache_i), 
+    WriteBuffer WriteBuffer_u(.clk(clk), .rst(rst), .judge(judge),
         
                               .wreq_i(queue_wreq_i), .waddr_i(queue_waddr_i), .wdata_i(queue_wdata_i), 
                               .wsel(wsel_into_FIFO), .whit_o(whit_o), 
                               .rreq_i(rvalid_2 || wvalid_2), .raddr_i({ptag_2, index_2, offset_2}), .rhit_o(rhit_o), .rdata_o(queue_rdata_o), 
                               .state_o(state_o), 
                               
-                              .AXI_valid_i(wr_rdy_i), .AXI_wen_o(FIFO_req), 
+                              .AXI_valid_i(wr_valid_i), .AXI_wen_o(FIFO_req), 
                               .AXI_wdata_o(FIFO_data), .AXI_waddr_o(FIFO_addr));
     
-    assign wr_len = (duncache_2 & wr_req_o) ? 8'h0 : 8'h3;
+    assign wr_len = (judge[0] & wr_req_o) ? 8'h0 : 8'h3;
     
-    
-    //UnCache
-    wire UnCache_req;
-    wire [127:0] UnCache_data;
-    wire [31:0] UnCache_addr;
-    assign UnCache_req = (duncache_2 & !wr_valid_i & wvalid_2) ? 1'b1 : 1'b0;
-    assign UnCache_data = (duncache_2 & wr_req_o) ? {4{wdata_i}}: 128'b0;
-    assign UnCache_addr = (duncache_2 & wr_req_o) ? {ptag_2, index_2, offset_2} : 32'b0;
-    
-    assign wr_req_o = (duncache_2) ? UnCache_req: FIFO_req;
-    assign wr_data_o = duncache_2 ? UnCache_data : FIFO_data;
-    assign wr_addr_o = duncache_2 ? UnCache_addr : FIFO_addr;
+    assign wr_req_o = judge[0] ? UnCache_req: FIFO_req;
+    assign wr_data_o = judge[0] ? UnCache_data : FIFO_data;
+    assign wr_addr_o = judge[0] ? UnCache_addr : FIFO_addr;
     
     
     
@@ -292,6 +317,7 @@ module DCache_pipeline(
     reg collision_way0;
     reg collision_way1;
     reg [31:0]write_into_Cache_inst_2;
+    
     always@(posedge clk)begin
       collision_way0 <= (|wea_way0 && index_1 == index_2) ? 1'b1 :1'b0;
       collision_way1 <= (|wea_way1 && index_1 == index_2) ? 1'b1 :1'b0;
@@ -300,6 +326,20 @@ module DCache_pipeline(
       tagv_way1_2 <= {1'b1,ptag_2};
     end
     
+    reg [31:0] write_into_Cache_ff [3:0];
+    always @(posedge clk) begin
+        if (~rst) begin
+            write_into_Cache_ff[3] <= 32'b0;
+            write_into_Cache_ff[2] <= 32'b0;
+            write_into_Cache_ff[1] <= 32'b0;
+            write_into_Cache_ff[0] <= 32'b0;
+        end else begin
+            write_into_Cache_ff[3] <= write_into_Cache[3];
+            write_into_Cache_ff[2] <= write_into_Cache[2];
+            write_into_Cache_ff[1] <= write_into_Cache[1];
+            write_into_Cache_ff[0] <= write_into_Cache[0];
+        end
+    end
     
     //* logics *//
     //////////inner logics
@@ -308,8 +348,10 @@ module DCache_pipeline(
             assign read_from_AXI[i] = ret_data_i[32*(i+1)-1:32*i];
     end
     //data_select
-    wire [31:0]inst_way0 = collision_way0 ? write_into_Cache_inst_2 : way0_cacheline[offset_2[3:2]];     //cache address partition in page 228
-    wire [31:0]inst_way1 = collision_way1 ? write_into_Cache_inst_2 : way1_cacheline[offset_2[3:2]];
+    wire [31:0]inst_way0 = collision_way0 ? write_into_Cache_inst_2 : 
+                             way0_tagv[20] ? way0_cacheline[offset_2[3:2]] : 32'b0;     //cache address partition in page 228
+    wire [31:0]inst_way1 = collision_way1 ? write_into_Cache_inst_2 : 
+                             way1_tagv[20] ? way1_cacheline[offset_2[3:2]] : 32'b0;
     assign tagv_final_way0 = collision_way0 ? tagv_way0_2 : way0_tagv;
     assign tagv_final_way1 = collision_way1 ? tagv_way1_2 : way1_tagv;
     
@@ -318,10 +360,10 @@ module DCache_pipeline(
                             (ptag_2 == tagv_final_way0[19:0]) ? 1'b1 : 1'b0;
     assign hit_judge_way1 = (tagv_final_way1[20] != 1'b1) ? 1'b0 : 
                             (ptag_2 == tagv_final_way1[19:0]) ? 1'b1 : 1'b0;
-    assign hit = (hit_judge_way0 | hit_judge_way1 | rhit_o) && (rvalid_2||wvalid_2) && ~duncache_2;
+    assign hit = (hit_judge_way0 | hit_judge_way1 | rhit_o|whit_o) && (rvalid_2||wvalid_2) && ~duncache_2;
     assign nhit = ~hit && (rvalid_2||wvalid_2);
     
-    assign hit_o = hit;
+//    assign hit_o = hit;
     
     //write_into_Cache
     wire [31:0]wsel_expand;
@@ -330,22 +372,22 @@ module DCache_pipeline(
         if(hit)begin        //////hit write
             if(hit_judge_way0)begin
                 case(offset_2[3:2])
-                    2'b00: begin write_into_Cache[3] = way0_cacheline[3];
-                                  write_into_Cache[2] = way0_cacheline[2];
-                                  write_into_Cache[1] = way0_cacheline[1];
-                                  write_into_Cache[0] = wdata_2; end
-                    2'b01: begin write_into_Cache[3] = way0_cacheline[3];
-                                  write_into_Cache[2] = way0_cacheline[2];
-                                  write_into_Cache[1] = wdata_2;
-                                  write_into_Cache[0] = way0_cacheline[0]; end
-                    2'b10: begin write_into_Cache[3] = way0_cacheline[3];
-                                  write_into_Cache[2] = wdata_2;
-                                  write_into_Cache[1] = way0_cacheline[1];
-                                  write_into_Cache[0] = way0_cacheline[0]; end
-                    2'b11: begin write_into_Cache[3] = wdata_2;
-                                  write_into_Cache[2] = way0_cacheline[2];
-                                  write_into_Cache[1] = way0_cacheline[1];
-                                  write_into_Cache[0] = way0_cacheline[0]; end
+                    2'b00: begin  write_into_Cache[3] = collision_way0 ? write_into_Cache_ff[3] : way0_cacheline[3];
+                                  write_into_Cache[2] = collision_way0 ? write_into_Cache_ff[2] : way0_cacheline[2];
+                                  write_into_Cache[1] = collision_way0 ? write_into_Cache_ff[1] : way0_cacheline[1];
+                                  write_into_Cache[0] = (wdata_2 & wsel_expand)|((collision_way0 ? write_into_Cache_ff[0] : way0_cacheline[0]) & ~wsel_expand); end
+                    2'b01: begin  write_into_Cache[3] = collision_way0 ? write_into_Cache_ff[3] : way0_cacheline[3];
+                                  write_into_Cache[2] = collision_way0 ? write_into_Cache_ff[2] : way0_cacheline[2];
+                                  write_into_Cache[1] = (wdata_2 & wsel_expand)|((collision_way0 ? write_into_Cache_ff[1] : way0_cacheline[1]) & ~wsel_expand);
+                                  write_into_Cache[0] = collision_way0 ? write_into_Cache_ff[0] : way0_cacheline[0]; end
+                    2'b10: begin  write_into_Cache[3] = collision_way0 ? write_into_Cache_ff[3] : way0_cacheline[3];
+                                  write_into_Cache[2] = (wdata_2 & wsel_expand)|((collision_way0 ? write_into_Cache_ff[2] : way0_cacheline[2]) & ~wsel_expand);
+                                  write_into_Cache[1] = collision_way0 ? write_into_Cache_ff[1] : way0_cacheline[1];
+                                  write_into_Cache[0] = collision_way0 ? write_into_Cache_ff[0] : way0_cacheline[0]; end
+                    2'b11: begin  write_into_Cache[3] = (wdata_2 & wsel_expand)|((collision_way0 ? write_into_Cache_ff[3] : way0_cacheline[3]) & ~wsel_expand);
+                                  write_into_Cache[2] = collision_way0 ? write_into_Cache_ff[2] : way0_cacheline[2];
+                                  write_into_Cache[1] = collision_way0 ? write_into_Cache_ff[1] : way0_cacheline[1];
+                                  write_into_Cache[0] = collision_way0 ? write_into_Cache_ff[0] : way0_cacheline[0]; end
                     default: begin write_into_Cache[3] = way0_cacheline[3];
                                      write_into_Cache[2] = way0_cacheline[2];
                                      write_into_Cache[1] = way0_cacheline[1];
@@ -353,22 +395,22 @@ module DCache_pipeline(
                 endcase
             end else if(hit_judge_way1)begin
                 case(offset_2[3:2])
-                    2'b00: begin write_into_Cache[3] = way1_cacheline[3];
-                                  write_into_Cache[2] = way1_cacheline[2];
-                                  write_into_Cache[1] = way1_cacheline[1];
-                                  write_into_Cache[0] = wdata_2; end
-                    2'b01: begin write_into_Cache[3] = way1_cacheline[3];
-                                  write_into_Cache[2] = way1_cacheline[2];
-                                  write_into_Cache[1] = wdata_2;
-                                  write_into_Cache[0] = way1_cacheline[0]; end
-                    2'b10: begin write_into_Cache[3] = way1_cacheline[3];
-                                  write_into_Cache[2] = wdata_2;
-                                  write_into_Cache[1] = way1_cacheline[1];
-                                  write_into_Cache[0] = way1_cacheline[0]; end
-                    2'b11: begin write_into_Cache[3] = wdata_2;
-                                  write_into_Cache[2] = way1_cacheline[2];
-                                  write_into_Cache[1] = way1_cacheline[1];
-                                  write_into_Cache[0] = way1_cacheline[0]; end
+                    2'b00: begin  write_into_Cache[3] = collision_way1 ? write_into_Cache_ff[3] : way1_cacheline[3];
+                                  write_into_Cache[2] = collision_way1 ? write_into_Cache_ff[2] : way1_cacheline[2];
+                                  write_into_Cache[1] = collision_way1 ? write_into_Cache_ff[1] : way1_cacheline[1];
+                                  write_into_Cache[0] = (wdata_2 & wsel_expand)|((collision_way1 ? write_into_Cache_ff[0] : way1_cacheline[0]) & ~wsel_expand); end
+                    2'b01: begin  write_into_Cache[3] = collision_way1 ? write_into_Cache_ff[3] : way1_cacheline[3];
+                                  write_into_Cache[2] = collision_way1 ? write_into_Cache_ff[2] : way1_cacheline[2];
+                                  write_into_Cache[1] = (wdata_2 & wsel_expand)|((collision_way1 ? write_into_Cache_ff[1] : way1_cacheline[1]) & ~wsel_expand);
+                                  write_into_Cache[0] = collision_way1 ? write_into_Cache_ff[0] : way1_cacheline[0]; end
+                    2'b10: begin  write_into_Cache[3] = collision_way1 ? write_into_Cache_ff[3] : way1_cacheline[3];
+                                  write_into_Cache[2] = (wdata_2 & wsel_expand)|((collision_way1 ? write_into_Cache_ff[2] : way1_cacheline[2]) & ~wsel_expand);
+                                  write_into_Cache[1] = collision_way1 ? write_into_Cache_ff[1] : way1_cacheline[1];
+                                  write_into_Cache[0] = collision_way1 ? write_into_Cache_ff[0] : way1_cacheline[0]; end
+                    2'b11: begin  write_into_Cache[3] = (wdata_2 & wsel_expand)|((collision_way1 ? write_into_Cache_ff[3] : way1_cacheline[3]) & ~wsel_expand);
+                                  write_into_Cache[2] = collision_way1 ? write_into_Cache_ff[2] : way1_cacheline[2];
+                                  write_into_Cache[1] = collision_way1 ? write_into_Cache_ff[1] : way1_cacheline[1];
+                                  write_into_Cache[0] = collision_way1 ? write_into_Cache_ff[0] : way1_cacheline[0]; end
                     default: begin write_into_Cache[3] = way1_cacheline[3];
                                      write_into_Cache[2] = way1_cacheline[2];
                                      write_into_Cache[1] = way1_cacheline[1];
@@ -380,7 +422,7 @@ module DCache_pipeline(
                 write_into_Cache[1] = way1_cacheline[1];
                 write_into_Cache[0] = way1_cacheline[0]; 
             end
-        end else if(rhit_o)begin    //////hit queue
+        end else if(rhit_o|whit_o)begin    //////hit queue
             case(offset_2[3:2])
                 2'b00: begin write_into_Cache[3] = queue_rdata_o[32*4-1: 32*3];
                               write_into_Cache[2] = queue_rdata_o[32*3-1: 32*2];
@@ -403,6 +445,11 @@ module DCache_pipeline(
                                  write_into_Cache[1] = queue_rdata_o[32*2-1: 32*1];
                                  write_into_Cache[0] = queue_rdata_o[32*1-1: 32*0]; end
             endcase
+        end else if(nhit && rvalid_2)begin      //read not hit
+            write_into_Cache[3] = ret_data_i[32*4-1: 32*3];
+            write_into_Cache[2] = ret_data_i[32*3-1: 32*2];
+            write_into_Cache[1] = ret_data_i[32*2-1: 32*1];
+            write_into_Cache[0] = ret_data_i[32*1-1: 32*0];
         end else if(nhit)begin      //write not hit
             case(offset_2[3:2])
                 2'b00: begin write_into_Cache[3] = ret_data_i[32*4-1: 32*3];
@@ -426,11 +473,6 @@ module DCache_pipeline(
                                  write_into_Cache[1] = ret_data_i[32*2-1: 32*1];
                                  write_into_Cache[0] = ret_data_i[32*1-1: 32*0]; end
             endcase
-        end else if(nhit && rvalid_2)begin      //read not hit
-            write_into_Cache[3] = ret_data_i[32*4-1: 32*3];
-            write_into_Cache[2] = ret_data_i[32*3-1: 32*2];
-            write_into_Cache[1] = ret_data_i[32*2-1: 32*1];
-            write_into_Cache[0] = ret_data_i[32*1-1: 32*0];
         end else begin
             write_into_Cache[3] = 32'b0;
             write_into_Cache[2] = 32'b0;
@@ -454,8 +496,10 @@ module DCache_pipeline(
     always@(*)begin
         if(duncache_2 && data_ok_o == 1'b0 && rvalid_2)begin
             stall_o = 1'b1;
-        end else if(duncache_2 && wvalid_2)begin
-            stall_o = ~wr_valid_i;
+        end else if (judge[0] & wr_valid_i) begin
+            stall_o = 1'b0;
+        end else if(duncache_2 & wvalid_2)begin
+            stall_o = 1'b1;
         end else if (ret_valid_i & (&state_o) & write_dirty) begin
             stall_o = 1'b1;
         end else if (~duncache_2 & nhit) begin
