@@ -239,10 +239,10 @@ module DCache_pipeline_nowb(
         if(ret_valid_i)begin    //write back
             if(LRU_current)begin
                 Cache_data_1 = {way1_cacheline[7], way1_cacheline[6], way1_cacheline[5], way1_cacheline[4], way1_cacheline[3], way1_cacheline[2], way1_cacheline[1], way1_cacheline[0]};
-                Cache_addr_1 = {tagv_final_way1[19:0], index_2, offset_2};
+                Cache_addr_1 = {tagv_final_way1[19:0], index_2, 5'b0};
             end else begin
                 Cache_data_1 = {way0_cacheline[7], way0_cacheline[6], way0_cacheline[5], way0_cacheline[4], way0_cacheline[3], way0_cacheline[2], way0_cacheline[1], way0_cacheline[0]};
-                Cache_addr_1 = {tagv_final_way0[19:0], index_2, offset_2};
+                Cache_addr_1 = {tagv_final_way0[19:0], index_2, 5'b0};
             end 
         end else begin
             Cache_data_1 = 256'b0;
@@ -324,7 +324,7 @@ module DCache_pipeline_nowb(
                             (ptag_2 == tagv_final_way0[19:0]) ? 1'b1 : 1'b0;
     assign hit_judge_way1 = (tagv_final_way1[20] != 1'b1) ? 1'b0 : 
                             (ptag_2 == tagv_final_way1[19:0]) ? 1'b1 : 1'b0;
-    assign hit = (hit_judge_way0 | hit_judge_way1) && (rvalid_2||wvalid_2) && ~duncache_2;
+    assign hit = (hit_judge_way0 | hit_judge_way1) && (rvalid_2||wvalid_2) && ~duncache_2 && ~Cache_req;
     assign nhit = ~hit && (rvalid_2||wvalid_2);
     
 //    assign hit_o = hit;
